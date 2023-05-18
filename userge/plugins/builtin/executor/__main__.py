@@ -20,6 +20,7 @@ import traceback
 from contextlib import contextmanager
 from enum import Enum
 from getpass import getuser
+from shutil import which
 from typing import Awaitable, Any, Callable, Dict, Optional, Tuple, Iterable
 
 import aiofiles
@@ -30,6 +31,7 @@ try:
 except ImportError:
     # pylint: disable=ungrouped-imports
     from os import kill as killpg
+    # pylint: disable=ungrouped-imports
     from signal import CTRL_C_EVENT as SIGKILL
 
     def geteuid() -> int:
@@ -197,13 +199,13 @@ async def eval_(message: Message):
     async def _callback(output: Optional[str], errored: bool):
         final = ""
         if not silent_mode:
-            final += f"**>** {replied.link if is_file else f'```{cmd}```'}\n\n"
+            final += "**>**" + (replied.link if is_file else f"```python\n{cmd}```") + "\n\n"
         if isinstance(output, str):
             output = output.strip()
             if output == '':
                 output = None
         if output is not None:
-            final += f"**>>** ```{output}```"
+            final += f"**>>** ```python\n{output}```"
         if errored and message.chat.type in (
                 enums.ChatType.GROUP,
                 enums.ChatType.SUPERGROUP,
@@ -246,7 +248,7 @@ async def eval_(message: Message):
             await future
         except asyncio.CancelledError:
             await asyncio.gather(msg.canceled(),
-                                 CHANNEL.log(f"**EVAL Process Canceled!**\n\n```{cmd}```"))
+                                 CHANNEL.log(f"**EVAL Process Canceled!**\n\n```python\n{cmd}```"))
         finally:
             _EVAL_TASKS.pop(future, None)
 
@@ -463,6 +465,8 @@ class Term:
             stderr=asyncio.subprocess.PIPE)
         if setsid:
             kwargs['preexec_fn'] = setsid
+        if sh := which(os.environ.get("USERGE_SHELL", "bash")):
+            kwargs['executable'] = sh
         process = await asyncio.create_subprocess_shell(cmd, **kwargs)
         t_obj = cls(process)
         t_obj._start()
